@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+:root {
+  /* Danida Bridal — soft pink palette */
+  --pink-light: #F9F1F3;
+  --pink-base: #F0DCE2;
+  --pink-dark: #D6A6B3;
+
+  /* Neutral colors */
+  --background: #FFFCFA;
+  --foreground: #292723;
+  --text-muted: #8B737A;
+  --border: #EADDE0;
+}
+
+body {
+  background-color: var(--pink-light);
+  color: var(--foreground);
+  font-family: 'Georgia', serif;
+}
