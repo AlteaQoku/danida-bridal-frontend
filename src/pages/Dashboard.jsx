@@ -1,295 +1,227 @@
-import { useState, useEffect } from 'react'
+
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertTriangle } from 'lucide-react'
+import {
+  AlertTriangle,
+  Shirt,
+  ArrowRight,
+} from 'lucide-react'
 import api from '../api/axiosConfig'
-
-const API_BASE = 'http://localhost:8080'
-
-const LOCATIONS = {
-  IN_SALON: 'Në sallon',
-  WITH_BRIDE: 'Te nusja',
-  IN_CLEANING: 'Në pastrim',
-  UNKNOWN: 'I panjohur',
-}
-
-function getLocation(dress) {
-  const value = dress.currentLocation
-  const status = typeof value === 'string' ? value : value?.status
-  return LOCATIONS[status] ?? LOCATIONS.UNKNOWN
-}
 
 function Dashboard() {
   const [dresses, setDresses] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
 
   useEffect(() => {
-    api.get('/api/dresses')
-      .then(res => setDresses(res.data))
-      .catch(err => console.error('Failed to load dresses:', err))
-      .finally(() => setLoading(false))
+    let active = true
+
+    const fetchDresses = async () => {
+      try {
+        const response = await api.get('/dresses')
+        const data = response.data
+
+        const dressList = Array.isArray(data)
+          ? data
+          : data?.content ?? data?.dresses ?? []
+
+        if (active) {
+          setDresses(dressList)
+          setError(false)
+        }
+      } catch (err) {
+        console.error('Failed to load dresses:', {
+          message: err.message,
+          url: err.config?.url,
+          status: err.response?.status,
+          response: err.response?.data,
+        })
+
+        if (active) setError(true)
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+
+    fetchDresses()
+
+    return () => {
+      active = false
+    }
   }, [])
 
-  const totalDresses = dresses.length
+  // Match the fields returned by the dresses API.
+  const dressesWithBride = dresses.filter(
+    (dress) => dress.location === 'WITH_BRIDE'
+  )
 
-  const inSalon = dresses.filter(
-    d => getLocation(d) === LOCATIONS.IN_SALON
-  ).length
-
-  const withBride = dresses.filter(
-    d => getLocation(d) === LOCATIONS.WITH_BRIDE
-  ).length
-
-  const inCleaning = dresses.filter(
-    d => getLocation(d) === LOCATIONS.IN_CLEANING
-  ).length
-
-  const damaged = dresses.filter(d => d.hasDamage).length
+  const damagedDresses = dresses.filter(
+    (dress) => dress.hasUnresolvedDamage === true
+  )
 
   const stats = [
-    { label: 'Fustane gjithsej', value: totalDresses },
-    { label: 'Në sallon', value: inSalon },
-    { label: 'Te nusja', value: withBride },
-    { label: 'Në pastrim', value: inCleaning },
-    { label: 'Me dëmtim', value: damaged, isAlert: true },
+    {
+      label: 'Fustanet me nuse',
+      value: dressesWithBride.length,
+      description: 'Fustane që aktualisht ndodhen te nuset',
+      icon: Shirt,
+      href: '/dresses',
+      loading,
+      failed: error,
+    },
+    {
+      label: 'Fustanet me dëmtime',
+      value: damagedDresses.length,
+      description: 'Fustane me dëmtime të pazgjidhura',
+      icon: AlertTriangle,
+      href: '/dresses/damaged',
+      loading,
+      failed: error,
+    },
   ]
 
   return (
-    <main className="min-h-screen bg-[var(--pink-light)] text-[var(--foreground)]">
-      <div className="mx-auto max-w-[1440px] px-5 py-10 sm:px-8 lg:px-14 lg:py-14">
+    <div className="space-y-8">
+      {/* Welcome section */}
+      <section
+        className="relative overflow-hidden rounded-xl
+          border border-[var(--border)] bg-[var(--pink-light)]
+          px-6 py-10 sm:px-10 sm:py-12"
+      >
+        <div className="relative z-10 max-w-2xl">
+          <p className="mb-4 text-xs uppercase tracking-[0.3em] text-[var(--text-muted)]">
+            Mirë se vini në
+          </p>
 
-        {/* Page heading */}
-        <header className="flex flex-col gap-6 border-b border-[var(--border)] pb-8 text-center sm:text-center">
+          <h1
+            className="font-serif text-4xl font-normal uppercase
+              tracking-wide text-[var(--foreground)] sm:text-5xl lg:text-6xl"
+          >
+            Danida Bridal
+          </h1>
+
+          <div className="my-5 flex max-w-sm items-center gap-3">
+            <div className="h-px flex-1 bg-[var(--border)]" />
+            <span className="text-sm text-[var(--pink-dark)]">◆</span>
+            <div className="h-px flex-1 bg-[var(--border)]" />
+          </div>
+
+          <p className="font-serif text-base italic leading-relaxed text-[var(--text-muted)] sm:text-lg">
+            Elegancë, cilësi dhe detaje që tregojnë historinë tuaj.
+          </p>
+        </div>
+      </section>
+
+      {/* Statistics */}
+      <section>
+        <div className="mb-4 flex items-end justify-between gap-4">
           <div>
-            <p className="mb-4 text-[10px] uppercase tracking-[0.3em] text-[var(--text-muted)]">
-              DANIDA BRIDAL · MENAXHIMI I ATELIERIT
+            <h2 className="font-serif text-xl text-[var(--foreground)]">
+              Përmbledhje
+            </h2>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">
+              Gjendja aktuale e butikut tuaj
             </p>
-
-            <h1 className="font-serif text-4xl font-normal tracking-tight sm:text-5xl lg:text-6xl">
-              Mirë se vini
-            </h1>
-          </div>
-        </header>
-
-        {/* Statistics */}
-        <section
-          className="pt-10 lg:pt-14"
-          aria-labelledby="overview-title"
-        >
-          <div className="mb-6 flex items-center justify-between gap-4">
-            <div>
-              <p className="mb-2 text-[10px] uppercase tracking-[0.25em] text-[var(--text-muted)]">
-                Përmbledhje
-              </p>
-
-              <h2
-                id="overview-title"
-                className="font-serif text-2xl font-normal sm:text-3xl"
-              >
-                Gjendja e koleksionit
-              </h2>
-            </div>
-
-            <span className="text-xs text-[var(--text-muted)]">
-              {loading ? 'Duke ngarkuar…' : 'Të dhënat aktuale'}
-            </span>
           </div>
 
-          <div className="grid grid-cols-2 border border-[var(--border)] bg-[var(--background)] lg:grid-cols-5">
-            {stats.map((stat, index) => (
-              stat.isAlert && !loading && stat.value > 0 ? (
-                <Link
-                  key={stat.label}
-                  to="/dresses/damaged"
-                  className={`
-                    p-5 sm:p-7 lg:p-8 transition hover:bg-red-100
-                    ${index % 2 !== 0 ? 'border-l border-[var(--border)]' : ''}
-                    ${index >= 2 ? 'border-t border-[var(--border)] lg:border-t-0' : ''}
-                    ${index === 2 ? 'lg:border-l-0' : ''}
-                    ${index === 3 ? 'lg:border-l lg:border-[var(--border)]' : ''}
-                    ${index === 4 ? 'lg:border-l lg:border-[var(--border)]' : ''}
-                    border-red-300 bg-red-50
-                  `}
-                >
-                  <p className="mb-5 text-[10px] uppercase tracking-[0.15em] text-red-700 sm:text-xs">
-                    <AlertTriangle size={14} className="mr-1 inline-flex" />
-                    {stat.label}
-                  </p>
+          <span className="text-xs text-[var(--text-muted)]">
+            {loading ? 'Duke ngarkuar...' : 'Të dhëna aktuale'}
+          </span>
+        </div>
 
-                  <p className="font-serif text-4xl font-normal tabular-nums text-red-700 sm:text-5xl">
-                    {stat.value}
-                  </p>
+        {error && (
+          <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            Statistikat nuk mund të ngarkoheshin. Kontrolloni lidhjen me serverin.
+          </p>
+        )}
 
-                  <p className="mt-4 text-xs text-red-700">
-                    Shiko të gjitha
-                    <span className="ml-1 text-lg">→</span>
-                  </p>
-                </Link>
-              ) : (
-                <div
-                  key={stat.label}
-                  className={`
-                    p-5 sm:p-7 lg:p-8
-                    ${index % 2 !== 0 ? 'border-l border-[var(--border)]' : ''}
-                    ${index >= 2 ? 'border-t border-[var(--border)] lg:border-t-0' : ''}
-                    ${index === 2 ? 'lg:border-l-0' : ''}
-                    ${index === 3 ? 'lg:border-l lg:border-[var(--border)]' : ''}
-                    ${index === 4 ? 'lg:border-l lg:border-[var(--border)]' : ''}
-                    ${stat.isAlert ? 'border-red-300 bg-red-50' : ''}
-                  `}
-                >
-                  <p className={`mb-5 text-[10px] uppercase tracking-[0.15em] sm:text-xs ${stat.isAlert ? 'text-red-700' : 'text-[var(--text-muted)]'}`}>
-                    {stat.isAlert && (
-                      <AlertTriangle size={14} className="mr-1 inline-flex" />
-                    )}
-                    {stat.label}
-                  </p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {stats.map((stat) => {
+            const Icon = stat.icon
 
-                  <p className={`font-serif text-4xl font-normal tabular-nums sm:text-5xl ${stat.isAlert ? 'text-red-700' : ''}`}>
-                    {loading ? '—' : stat.value}
-                  </p>
-                </div>
-              )
-            ))}
-          </div>
-        </section>
-
-        {/* Recent dresses */}
-        <section
-          className="pt-14 lg:pt-20"
-          aria-labelledby="recent-title"
-        >
-          <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="mb-2 text-[10px] uppercase tracking-[0.25em] text-[var(--text-muted)]">
-                Përzgjedhje
-              </p>
-
-              <h2
-                id="recent-title"
-                className="font-serif text-3xl font-normal sm:text-4xl"
-              >
-                Fustanet e fundit
-              </h2>
-            </div>
-
-            <Link
-              to="/dresses"
-              className="text-xs uppercase tracking-[0.12em] text-[var(--text-muted)] transition-colors hover:text-[var(--pink-dark)]"
-            >
-              Shiko koleksionin <span className="ml-1">→</span>
-            </Link>
-          </div>
-
-          {loading ? (
-            <div className="py-16 text-center text-sm text-[var(--text-muted)]">
-              Duke ngarkuar koleksionin…
-            </div>
-          ) : dresses.length === 0 ? (
-            <div className="border border-[var(--border)] bg-[var(--background)] px-6 py-16 text-center">
-              <h3 className="mb-3 font-serif text-2xl">
-                Koleksioni juaj fillon këtu
-              </h3>
-
-              <p className="mb-6 text-sm text-[var(--text-muted)]">
-                Shtoni fustanin e parë për të filluar organizimin e koleksionit.
-              </p>
-
+            return (
               <Link
-                to="/dresses/create"
-                className="inline-block border border-[var(--pink-dark)] px-6 py-3 text-xs uppercase tracking-[0.12em] transition-colors hover:bg-[var(--pink-base)]"
+                key={stat.label}
+                to={stat.href}
+                className="group rounded-xl border border-[var(--border)]
+                  bg-[var(--background)] p-5 transition-all duration-200
+                  hover:-translate-y-0.5 hover:shadow-md sm:p-6"
               >
-                Shto fustan
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-[var(--pink-light)] text-[var(--pink-dark)]">
+                    <Icon size={21} strokeWidth={1.6} />
+                  </div>
+
+                  <ArrowRight
+                    size={17}
+                    className="text-[var(--text-muted)] transition-transform group-hover:translate-x-1"
+                  />
+                </div>
+
+                <p className="mt-5 text-sm text-[var(--text-muted)]">
+                  {stat.label}
+                </p>
+
+                <p className="mt-1 font-serif text-3xl text-[var(--foreground)]">
+                  {stat.loading ? '—' : stat.failed ? '!' : stat.value}
+                </p>
+
+                <p className="mt-2 text-xs leading-relaxed text-[var(--text-muted)]">
+                  {stat.failed ? 'Të dhënat nuk janë të disponueshme' : stat.description}
+                </p>
               </Link>
+            )
+          })}
+        </div>
+      </section>
+
+      {/* Quick actions */}
+      <section>
+        <h2 className="mb-4 font-serif text-xl text-[var(--foreground)]">
+          Veprime të shpejta
+        </h2>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Link
+            to="/dresses/create"
+            className="group flex min-h-32 items-center justify-between gap-4 rounded-xl bg-[var(--pink-dark)] p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:p-8"
+          >
+            <div>
+              <h3 className="font-serif text-xl text-white">
+                Shto fustan
+              </h3>
+              <p className="mt-1 text-sm text-white/80">
+                Regjistro një fustan të ri
+              </p>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-              {dresses.slice(0, 6).map(dress => {
-                const src = dress.imageUrl
-                  ? dress.imageUrl.startsWith('http')
-                    ? dress.imageUrl
-                    : `${API_BASE}${dress.imageUrl}`
-                  : null
 
-                return (
-                  <Link
-                    to={`/dresses/${dress.id}`}
-                    key={dress.id}
-                    className="group min-w-0"
-                  >
-                    <div className="relative aspect-[3/4] overflow-hidden bg-[var(--pink-base)]">
-                      {src ? (
-                        <img
-                          src={src}
-                          alt={dress.name}
-                          loading="lazy"
-                          className="h-full w-full object-contain p-4 transition-transform duration-500 group-hover:scale-[1.025]"
-                          onError={e => {
-                            e.currentTarget.style.display = 'none'
-                          }}
-                        />
-                      ) : (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="text-[10px] uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                            Pa fotografi
-                          </span>
-                        </div>
-                      )}
+            <span className="text-xl text-white transition-transform group-hover:translate-x-1">
+              →
+            </span>
+          </Link>
 
-                      {dress.hasDamage && (
-                        <span className="absolute left-3 top-3 bg-[var(--background)] px-3 py-1.5 text-[10px] uppercase tracking-[0.1em] text-[var(--foreground)]">
-                          Kërkon vëmendje
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="pt-4">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <h3 className="truncate font-serif text-xl font-normal transition-colors group-hover:text-[var(--pink-dark)] sm:text-2xl">
-                            {dress.name}
-                          </h3>
-
-                          <p className="mt-2 text-xs text-[var(--text-muted)]">
-                            {[dress.category, dress.size, dress.color]
-                              .filter(Boolean)
-                              .join(' · ')}
-                          </p>
-                        </div>
-
-                        <p className="whitespace-nowrap pt-1 text-sm">
-                          €{dress.pricePerRental}
-                        </p>
-                      </div>
-
-                      <div className="mt-4 flex items-center justify-between border-t border-[var(--border)] pt-3">
-                        <span className="text-[10px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
-                          {getLocation(dress)}
-                        </span>
-
-                        <span className="text-xs text-[var(--text-muted)]">
-                          Stoku: {dress.stock}
-                        </span>
-                      </div>
-                    </div>
-                  </Link>
-                )
-              })}
+          <Link
+            to="/dresses/damaged"
+            className="group flex items-center gap-4 rounded-xl border border-red-200 bg-[var(--background)] p-5 transition hover:border-red-300 hover:bg-red-50 sm:col-span-2"
+          >
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-red-50 text-red-700">
+              <AlertTriangle size={22} />
             </div>
-          )}
-        </section>
 
-        {/* Footer */}
-        <footer className="mt-16 flex flex-col gap-2 border-t border-[var(--border)] pt-6 sm:flex-row sm:justify-between lg:mt-24">
-          <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--text-muted)]">
-            DANIDA BRIDAL
-          </p>
+            <div className="min-w-0 flex-1">
+              <h3 className="font-serif text-xl text-[var(--foreground)]">
+                Fustanet me dëmtime
+              </h3>
+              <p className="mt-1 text-sm text-[var(--text-muted)]">
+                Shiko fustanet e dëmtuara dhe historikun e tyre.
+              </p>
+            </div>
 
-          <p className="text-xs text-[var(--text-muted)]">
-            Elegancë në çdo detaj.
-          </p>
-        </footer>
-      </div>
-    </main>
+            <ArrowRight size={18} className="text-[var(--text-muted)]" />
+          </Link>
+        </div>
+      </section>
+    </div>
   )
 }
 

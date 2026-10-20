@@ -1,28 +1,35 @@
+
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import {
   ArrowLeft,
   Upload,
   Image as ImageIcon,
-  X,
   Save,
   LoaderCircle,
   ClipboardList,
   AlertCircle,
+  X,
 } from 'lucide-react'
 import api from '../../api/axiosConfig'
 
 const API_BASE = 'http://localhost:8080'
 
+const LOCATIONS = [
+  { value: 'IN_SALON', label: 'Në sallon' },
+  { value: 'WITH_BRIDE', label: 'Te nusja' },
+  { value: 'IN_CLEANING', label: 'Në pastrim' },
+]
+
 const initialForm = {
   name: '',
-  category: '',
-  pricePerRental: '',
+  categoryId: '',
   size: '',
   color: '',
-  stock: '',
   description: '',
-  imageUrl: '',
+  location: 'IN_SALON',
+  expectedReturnDate: '',
+  unavailable: false,
 }
 
 function getImageUrl(imageUrl) {
@@ -40,42 +47,57 @@ export default function UpdateDress() {
   const navigate = useNavigate()
 
   const [formData, setFormData] = useState(initialForm)
+  const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [selectedImage, setSelectedImage] = useState(null)
   const [imagePreview, setImagePreview] = useState('')
-  const [removeCurrentImage, setRemoveCurrentImage] = useState(false)
+  const [currentImageUrl, setCurrentImageUrl] = useState('')
 
-  // Load the existing dress.
   useEffect(() => {
     let active = true
 
-    async function fetchDress() {
+    async function fetchData() {
       try {
         setLoading(true)
         setError('')
 
-        const response = await api.get(`/api/dresses/${id}`)
-        const dress = response.data
+        const [dressResponse, categoriesResponse] = await Promise.all([
+          api.get(`/dresses/${id}`),
+          api.get('/categories'),
+        ])
 
         if (!active) return
 
+        const dress = dressResponse.data
+        const categoryData = categoriesResponse.data
+
+        const categoryList = Array.isArray(categoryData)
+          ? categoryData
+          : Array.isArray(categoryData?.content)
+            ? categoryData.content
+            : []
+
+        setCategories(categoryList)
+        setCurrentImageUrl(dress.imageUrl ?? '')
+
         setFormData({
           name: dress.name ?? '',
-          category: dress.category ?? '',
-          pricePerRental: dress.pricePerRental ?? '',
+          categoryId: String(dress.categoryId ?? ''),
           size: dress.size ?? '',
           color: dress.color ?? '',
-          stock: dress.stock ?? '',
           description: dress.description ?? '',
-          imageUrl: dress.imageUrl ?? '',
+          location: dress.location ?? 'IN_SALON',
+          expectedReturnDate: dress.expectedReturnDate ?? '',
+          unavailable: Boolean(dress.unavailable),
         })
       } catch (err) {
         if (active) {
+          console.error('Failed to load dress:', err)
           setError(
             err.response?.data?.message ||
-              'Could not load the dress. Please try again.'
+              'Të dhënat e fustanit nuk mund të ngarkoheshin.'
           )
         }
       } finally {
@@ -83,14 +105,13 @@ export default function UpdateDress() {
       }
     }
 
-    fetchDress()
+    fetchData()
 
     return () => {
       active = false
     }
   }, [id])
 
-  // Release temporary preview URLs when the selected image changes.
   useEffect(() => {
     if (!selectedImage) {
       setImagePreview('')
@@ -104,12 +125,20 @@ export default function UpdateDress() {
   }, [selectedImage])
 
   function handleChange(event) {
-    const { name, value } = event.target
+    const { name, value, type, checked } = event.target
 
-    setFormData((previous) => ({
-      ...previous,
-      [name]: value,
-    }))
+    setFormData((previous) => {
+      const next = {
+        ...previous,
+        [name]: type === 'checkbox' ? checked : value,
+      }
+
+      if (name === 'location' && value === 'IN_SALON') {
+        next.expectedReturnDate = ''
+      }
+
+      return next
+    })
   }
 
   function handleImageChange(event) {
@@ -119,33 +148,23 @@ export default function UpdateDress() {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
 
     if (!allowedTypes.includes(file.type)) {
-      setError('Please choose a JPG, PNG, or WebP image.')
+      setError('Zgjidhni një imazh JPG, PNG ose WebP.')
       event.target.value = ''
       return
     }
 
     if (file.size > 10 * 1024 * 1024) {
-      setError('The image must be smaller than 10 MB.')
+      setError('Imazhi duhet të jetë më i vogël se 10 MB.')
       event.target.value = ''
       return
     }
 
     setError('')
     setSelectedImage(file)
-    setRemoveCurrentImage(false)
   }
 
-  function handleRemoveImage() {
+  function handleCancelImageChange() {
     setSelectedImage(null)
-    setRemoveCurrentImage(true)
-
-    const input = document.getElementById('dress-image')
-    if (input) input.value = ''
-  }
-
-  function handleKeepCurrentImage() {
-    setSelectedImage(null)
-    setRemoveCurrentImage(false)
 
     const input = document.getElementById('dress-image')
     if (input) input.value = ''
@@ -156,79 +175,71 @@ export default function UpdateDress() {
     setError('')
 
     if (!formData.name.trim()) {
-      setError('Please enter a dress name.')
+      setError('Ju lutemi, shkruani emrin e fustanit.')
+      return
+    }
+
+    if (!formData.categoryId) {
+      setError('Ju lutemi, zgjidhni kategorinë e fustanit.')
+      return
+    }
+
+    if (!formData.size.trim()) {
+      setError('Ju lutemi, shkruani masën e fustanit.')
+      return
+    }
+
+    if (!formData.color.trim()) {
+      setError('Ju lutemi, shkruani ngjyrën e fustanit.')
       return
     }
 
     if (
-      formData.pricePerRental === '' ||
-      Number(formData.pricePerRental) < 0
+      ['WITH_BRIDE', 'IN_CLEANING'].includes(formData.location) &&
+      !formData.expectedReturnDate
     ) {
-      setError('Please enter a valid rental price.')
-      return
-    }
-
-    if (
-      formData.stock === '' ||
-      !Number.isInteger(Number(formData.stock)) ||
-      Number(formData.stock) < 0
-    ) {
-      setError('Stock must be a whole number of zero or more.')
+      setError(
+        'Ju lutemi, zgjidhni datën e pritshme të kthimit për këtë vendndodhje.'
+      )
       return
     }
 
     setSaving(true)
 
     try {
-      let imageUrl = formData.imageUrl
+      const payload = {
+        name: formData.name.trim(),
+        categoryId: Number(formData.categoryId),
+        size: formData.size.trim(),
+        color: formData.color.trim(),
+        description: formData.description,
+        location: formData.location,
+        expectedReturnDate:
+          formData.location === 'IN_SALON'
+            ? null
+            : formData.expectedReturnDate || null,
+        unavailable: formData.unavailable,
+      }
 
-      // Upload a new image only if the user selected one.
+      // 1. Update the dress details.
+      await api.patch(`/dresses/${id}`, payload)
+
+      // 2. Upload a replacement image only when one was selected.
       if (selectedImage) {
         const imageData = new FormData()
         imageData.append('file', selectedImage)
 
-        const uploadResponse = await api.post(
-          '/api/images/upload',
-          imageData
-        )
-
-        const result = uploadResponse.data
-
-        // Supports a response containing either a URL string
-        // or an object with an imageUrl, url, or path property.
-        imageUrl =
-          typeof result === 'string'
-            ? result
-            : result?.imageUrl ?? result?.url ?? result?.path
-
-        if (!imageUrl) {
-          throw new Error(
-            'The image was uploaded, but the server did not return its URL.'
-          )
-        }
-      } else if (removeCurrentImage) {
-        imageUrl = null
+        await api.post(`/dresses/${id}/image`, imageData)
       }
 
-      const payload = {
-        name: formData.name.trim(),
-        category: formData.category,
-        pricePerRental: Number(formData.pricePerRental),
-        size: formData.size,
-        color: formData.color,
-        stock: Number(formData.stock),
-        description: formData.description,
-        imageUrl,
-      }
-
-      await api.put(`/api/dresses/${id}`, payload)
-
-      navigate('/dresses')
+      // 3. Return to the updated dress page.
+      navigate(`/dresses/${id}`)
     } catch (err) {
+      console.error('Failed to update dress:', err)
+
       setError(
         err.response?.data?.message ||
-          err.message ||
-          'Could not update the dress. Please try again.'
+          'Fustani nuk mund të përditësohej. Ju lutemi, provoni përsëri.'
       )
     } finally {
       setSaving(false)
@@ -237,20 +248,18 @@ export default function UpdateDress() {
 
   const displayedImage = selectedImage
     ? imagePreview
-    : removeCurrentImage
-      ? ''
-      : getImageUrl(formData.imageUrl)
+    : getImageUrl(currentImageUrl)
 
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center gap-3 text-[var(--text-muted)]">
         <LoaderCircle className="animate-spin" size={20} />
-        <span>Loading dress details...</span>
+        <span>Duke ngarkuar të dhënat e fustanit…</span>
       </div>
     )
   }
 
-  if (error && !formData.name && !formData.category) {
+  if (error && !formData.name) {
     return (
       <main className="min-h-screen bg-[var(--pink-light)] px-5 py-10 sm:px-8">
         <div className="mx-auto max-w-3xl rounded-2xl border border-[var(--border)] bg-[var(--background)] p-8">
@@ -260,7 +269,7 @@ export default function UpdateDress() {
             className="inline-flex items-center gap-2 text-sm text-[var(--foreground)] hover:opacity-70"
           >
             <ArrowLeft size={16} />
-            Back to dresses
+            Kthehu te fustanet
           </Link>
         </div>
       </main>
@@ -270,65 +279,63 @@ export default function UpdateDress() {
   return (
     <main className="min-h-screen bg-[var(--pink-light)] px-4 py-8 sm:px-8 lg:px-12">
       <div className="mx-auto max-w-5xl">
-        {/* Header */}
         <Link
-          to="/dresses"
+          to={`/dresses/${id}`}
           className="mb-6 inline-flex items-center gap-2 text-sm text-[var(--text-muted)] transition hover:text-[var(--foreground)]"
         >
           <ArrowLeft size={16} />
-          Back to dresses
+          Kthehu te fustani
         </Link>
 
-        <div className="mb-8">
+        <header className="mb-8">
           <p className="mb-2 text-xs uppercase tracking-[0.3em] text-[var(--text-muted)]">
             Danida Bridal Collection
           </p>
           <h1 className="font-serif text-3xl font-normal text-[var(--foreground)] sm:text-4xl">
-            Edit dress
+            Përditëso fustanin
           </h1>
           <p className="mt-2 text-sm text-[var(--text-muted)]">
-            Update the details of your bridal collection.
+            Përditësoni të dhënat e fustanit në koleksionin tuaj.
           </p>
-        </div>
+        </header>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Dress information and image */}
           <section className="rounded-2xl border border-[var(--border)] bg-[var(--background)] p-5 shadow-sm sm:p-8">
             <div className="mb-6">
               <h2 className="font-serif text-xl text-[var(--foreground)]">
-                Dress information
+                Të dhënat e fustanit
               </h2>
               <p className="mt-1 text-sm text-[var(--text-muted)]">
-                Fields marked with * are required.
+                Fushat me * janë të detyrueshme.
               </p>
             </div>
 
             <div className="grid gap-8 lg:grid-cols-[220px_minmax(0,1fr)]">
-              {/* Image upload */}
               <div>
                 <label className="mb-3 block text-sm font-medium text-[var(--foreground)]">
-                  Dress image
+                  Imazhi i fustanit
                 </label>
 
                 <div className="relative flex h-[250px] items-center justify-center overflow-hidden rounded-xl border border-[var(--border)] bg-white">
                   {displayedImage ? (
                     <img
                       src={displayedImage}
-                      alt="Dress preview"
+                      alt={`Imazhi i fustanit ${formData.name}`}
                       className="h-full w-full object-contain p-2"
                     />
                   ) : (
                     <div className="flex flex-col items-center gap-3 text-[var(--text-muted)]">
                       <ImageIcon size={32} strokeWidth={1.3} />
-                      <span className="text-xs">No image selected</span>
+                      <span className="text-xs">Nuk ka imazh</span>
                     </div>
                   )}
 
-                  {displayedImage && (
+                  {selectedImage && (
                     <button
                       type="button"
-                      onClick={handleRemoveImage}
-                      aria-label="Remove dress image"
+                      onClick={handleCancelImageChange}
+                      aria-label="Anulo ndryshimin e imazhit"
+                      title="Anulo ndryshimin e imazhit"
                       className="absolute right-2 top-2 rounded-full border border-[var(--border)] bg-white p-2 text-[var(--foreground)] shadow-sm transition hover:bg-[var(--pink-light)]"
                     >
                       <X size={15} />
@@ -341,7 +348,7 @@ export default function UpdateDress() {
                   className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2.5 text-sm text-[var(--foreground)] transition hover:bg-[var(--pink-light)]"
                 >
                   <Upload size={16} />
-                  {selectedImage ? 'Choose another image' : 'Upload image'}
+                  {selectedImage ? 'Zgjidh imazh tjetër' : 'Ndrysho imazhin'}
                 </label>
 
                 <input
@@ -353,25 +360,20 @@ export default function UpdateDress() {
                 />
 
                 <p className="mt-2 text-center text-xs leading-5 text-[var(--text-muted)]">
-                  JPG, PNG or WebP. Maximum 10 MB.
+                  JPG, PNG ose WebP. Maksimumi 10 MB.
                 </p>
 
-                {removeCurrentImage && (
-                  <button
-                    type="button"
-                    onClick={handleKeepCurrentImage}
-                    className="mt-2 w-full text-xs text-[var(--text-muted)] underline underline-offset-4 hover:text-[var(--foreground)]"
-                  >
-                    Keep current image
-                  </button>
+                {selectedImage && (
+                  <p className="mt-2 break-words text-center text-xs text-[var(--text-muted)]">
+                    Imazhi i ri: {selectedImage.name}
+                  </p>
                 )}
               </div>
 
-              {/* Fields */}
               <div className="grid content-start gap-5 sm:grid-cols-2">
                 <div className="sm:col-span-2">
                   <label htmlFor="name" className="field-label">
-                    Dress name *
+                    Emri i fustanit *
                   </label>
                   <input
                     id="name"
@@ -379,92 +381,126 @@ export default function UpdateDress() {
                     value={formData.name}
                     onChange={handleChange}
                     required
+                    maxLength={255}
                     className="field-input"
-                    placeholder="e.g. Ivory Satin Wedding Dress"
+                    placeholder="p.sh. Fustan nusërie prej sateni"
                   />
                 </div>
 
-                <div>
-                  <label htmlFor="category" className="field-label">
-                    Category
+                <div className="sm:col-span-2">
+                  <label htmlFor="categoryId" className="field-label">
+                    Kategoria *
                   </label>
-                  <input
-                    id="category"
-                    name="category"
-                    value={formData.category}
-                    onChange={handleChange}
-                    className="field-input"
-                    placeholder="Dress category"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="pricePerRental" className="field-label">
-                    Rental price (€) *
-                  </label>
-                  <input
-                    id="pricePerRental"
-                    name="pricePerRental"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={formData.pricePerRental}
+                  <select
+                    id="categoryId"
+                    name="categoryId"
+                    value={formData.categoryId}
                     onChange={handleChange}
                     required
                     className="field-input"
-                    placeholder="0.00"
-                  />
+                  >
+                    <option value="">Zgjidhni kategorinë</option>
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
                   <label htmlFor="size" className="field-label">
-                    Size
+                    Masa *
                   </label>
                   <input
                     id="size"
                     name="size"
                     value={formData.size}
                     onChange={handleChange}
+                    required
+                    maxLength={50}
                     className="field-input"
-                    placeholder="e.g. S, M, 38"
+                    placeholder="p.sh. S, M, 38"
                   />
                 </div>
 
                 <div>
                   <label htmlFor="color" className="field-label">
-                    Color
+                    Ngjyra *
                   </label>
                   <input
                     id="color"
                     name="color"
                     value={formData.color}
                     onChange={handleChange}
-                    className="field-input"
-                    placeholder="e.g. Ivory"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="stock" className="field-label">
-                    Stock *
-                  </label>
-                  <input
-                    id="stock"
-                    name="stock"
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={formData.stock}
-                    onChange={handleChange}
                     required
+                    maxLength={100}
                     className="field-input"
-                    placeholder="0"
+                    placeholder="p.sh. E bardhë fildishi"
                   />
                 </div>
 
                 <div className="sm:col-span-2">
+                  <label htmlFor="location" className="field-label">
+                    Vendndodhja *
+                  </label>
+                  <select
+                    id="location"
+                    name="location"
+                    value={formData.location}
+                    onChange={handleChange}
+                    required
+                    className="field-input"
+                  >
+                    {LOCATIONS.map((location) => (
+                      <option key={location.value} value={location.value}>
+                        {location.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {formData.location !== 'IN_SALON' && (
+                  <div className="sm:col-span-2">
+                    <label htmlFor="expectedReturnDate" className="field-label">
+                      Data e pritshme e kthimit *
+                    </label>
+                    <input
+                      id="expectedReturnDate"
+                      name="expectedReturnDate"
+                      type="date"
+                      value={formData.expectedReturnDate}
+                      onChange={handleChange}
+                      required
+                      className="field-input"
+                    />
+                  </div>
+                )}
+
+                <div className="sm:col-span-2 rounded-xl border border-[var(--border)] p-4">
+                  <label className="flex cursor-pointer items-start gap-3">
+                    <input
+                      type="checkbox"
+                      name="unavailable"
+                      checked={formData.unavailable}
+                      onChange={handleChange}
+                      className="mt-1 h-4 w-4 accent-[var(--pink-dark)]"
+                    />
+                    <span>
+                      <span className="block text-sm font-medium text-[var(--foreground)]">
+                        Shënoje fustanin si të padisponueshëm
+                      </span>
+                      <span className="mt-1 block text-xs leading-5 text-[var(--text-muted)]">
+                        Aktivizojeni nëse fustani nuk mund të jepet me qira,
+                        edhe nëse ndodhet në sallon.
+                      </span>
+                    </span>
+                  </label>
+                </div>
+
+                <div className="sm:col-span-2">
                   <label htmlFor="description" className="field-label">
-                    Description
+                    Përshkrimi
                   </label>
                   <textarea
                     id="description"
@@ -473,7 +509,7 @@ export default function UpdateDress() {
                     value={formData.description}
                     onChange={handleChange}
                     className="field-input resize-y"
-                    placeholder="Add details about the dress, fabric, style, or fit..."
+                    placeholder="Shtoni detaje për materialin, stilin ose prerjen..."
                   />
                 </div>
               </div>
@@ -491,10 +527,10 @@ export default function UpdateDress() {
 
             <div className="mt-8 flex flex-col-reverse gap-3 border-t border-[var(--border)] pt-6 sm:flex-row sm:justify-end">
               <Link
-                to="/dresses"
+                to={`/dresses/${id}`}
                 className="inline-flex items-center justify-center rounded-lg border border-[var(--border)] px-5 py-3 text-sm text-[var(--foreground)] transition hover:bg-[var(--pink-light)]"
               >
-                Cancel
+                Anulo
               </Link>
 
               <button
@@ -507,38 +543,37 @@ export default function UpdateDress() {
                 ) : (
                   <Save size={17} />
                 )}
-                {saving ? 'Saving changes...' : 'Save changes'}
+                {saving ? 'Duke ruajtur…' : 'Ruaj ndryshimet'}
               </button>
             </div>
           </section>
         </form>
 
-        {/* Damage reports are intentionally separate from dress updates. */}
         <section className="mt-6 rounded-2xl border border-[var(--border)] bg-[var(--background)] p-5 sm:p-7">
           <div className="flex items-start gap-4">
             <div className="rounded-xl bg-[var(--pink-light)] p-3 text-[var(--foreground)]">
               <ClipboardList size={22} strokeWidth={1.5} />
             </div>
-
             <div className="flex-1">
               <h2 className="font-serif text-xl text-[var(--foreground)]">
-                Damage reports
+                Raportet e dëmtimeve
               </h2>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-[var(--text-muted)]">
-                Record and manage damage incidents separately from the dress
-                details. Existing reports should keep their own history.
+                Menaxhoni raportet e dëmtimeve veçmas nga të dhënat e fustanit.
+                Historia e dëmtimeve ruhet e ndarë.
               </p>
-
-              <p className="mt-3 text-xs text-[var(--text-muted)]">
-                Damage report management can be connected here once its API
-                endpoints and page are implemented.
-              </p>
+              <Link
+                to={`/dresses/${id}/damages`}
+                className="mt-4 inline-flex items-center gap-2 border border-[var(--border)] px-4 py-2.5 text-sm text-[var(--foreground)] transition hover:bg-[var(--pink-light)]"
+              >
+                Shiko dëmtimet
+                <ArrowLeft size={15} className="rotate-180" />
+              </Link>
             </div>
           </div>
         </section>
       </div>
 
-      {/* Local field styling */}
       <style>{`
         .field-label {
           display: block;

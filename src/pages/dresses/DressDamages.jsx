@@ -19,8 +19,8 @@ function DressDamages() {
     const loadDamages = async () => {
       try {
         const [dressResponse, damagesResponse] = await Promise.all([
-          api.get(`/api/dresses/${id}`),
-          api.get(`/api/dresses/${id}/damages`),
+          api.get(`/dresses/${id}`),
+          api.get(`/dresses/${id}/damages`),
         ])
 
         if (cancelled) return
@@ -49,31 +49,32 @@ function DressDamages() {
   }, [id])
 
   const handleResolutionChange = async (damage, resolved) => {
-    setUpdatingIds((current) => [...current, damage.id])
-    setError('')
+  setUpdatingIds((current) => [...current, damage.id])
+  setError('')
 
-    try {
-      const response = await api.patch(
-        `/api/dresses/${id}/damages/${damage.id}`,
-        null,
-        { params: { resolved } }
-      )
+  try {
+    const response = await api.patch(
+      `/api/damages/${damage.id}`,
+      { resolved }
+    )
 
-      setDamages((current) =>
-        current.map((item) =>
-          item.id === damage.id ? response.data : item
-        )
+    setDamages((current) =>
+      current.map((item) =>
+        item.id === damage.id ? response.data : item
       )
-    } catch (err) {
-      console.error('Failed to update damage:', err)
-      setError('Statusi i dëmtimit nuk u ruajt. Provo përsëri.')
-    } finally {
-      setUpdatingIds((current) =>
-        current.filter((damageId) => damageId !== damage.id)
-      )
-    }
+    )
+  } catch (err) {
+    console.error('Failed to update damage:', err)
+    setError(
+      err.response?.data?.message ||
+      'Statusi i dëmtimit nuk u ruajt. Provo përsëri.'
+    )
+  } finally {
+    setUpdatingIds((current) =>
+      current.filter((damageId) => damageId !== damage.id)
+    )
   }
-
+}
   if (loading) {
     return <div className="p-8">Duke ngarkuar dëmtimet…</div>
   }

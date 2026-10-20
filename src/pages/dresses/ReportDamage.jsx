@@ -8,7 +8,6 @@ import {
   Save,
   Shirt,
   CalendarDays,
-  CheckCircle2,
 } from 'lucide-react'
 import api from '../../api/axiosConfig'
 
@@ -29,16 +28,12 @@ export default function ReportDamage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState(false)
 
   const [formData, setFormData] = useState({
     description: '',
     reportedAt: getToday(),
-    needsReplacement: false,
-    replacementNote: '',
   })
 
-  // Load the dress associated with this damage report.
   useEffect(() => {
     let active = true
 
@@ -47,7 +42,7 @@ export default function ReportDamage() {
         setLoading(true)
         setError('')
 
-        const response = await api.get(`/api/dresses/${id}`)
+        const response = await api.get(`/dresses/${id}`)
 
         if (active) {
           setDress(response.data)
@@ -72,18 +67,17 @@ export default function ReportDamage() {
   }, [id])
 
   function handleChange(event) {
-    const { name, value, type, checked } = event.target
+    const { name, value } = event.target
 
     setFormData((previous) => ({
       ...previous,
-      [name]: type === 'checkbox' ? checked : value,
+      [name]: value,
     }))
   }
 
   async function handleSubmit(event) {
     event.preventDefault()
     setError('')
-    setSuccess(false)
 
     if (!formData.description.trim()) {
       setError('Ju lutem përshkruani dëmtimin.')
@@ -101,17 +95,10 @@ export default function ReportDamage() {
       const payload = {
         description: formData.description.trim(),
         reportedAt: formData.reportedAt,
-        needsReplacement: formData.needsReplacement,
-        replacementNote: formData.needsReplacement
-          ? formData.replacementNote.trim() || null
-          : null,
       }
 
-      await api.post(`/api/dresses/${id}/damages`, payload)
+      await api.post(`/dresses/${id}/damages`, payload)
 
-      setSuccess(true)
-
-      // Return to the dress details page after successful submission.
       navigate(`/dresses/${id}`)
     } catch (err) {
       setError(
@@ -156,7 +143,6 @@ export default function ReportDamage() {
   return (
     <main className="min-h-screen bg-[var(--pink-light)] px-4 py-8 sm:px-8 lg:px-12">
       <div className="mx-auto max-w-4xl">
-        {/* Back navigation */}
         <Link
           to={`/dresses/${id}`}
           className="mb-6 inline-flex items-center gap-2 text-sm text-[var(--text-muted)] transition hover:text-[var(--foreground)]"
@@ -165,7 +151,6 @@ export default function ReportDamage() {
           Kthehu te detajet e fustanit
         </Link>
 
-        {/* Page heading */}
         <div className="mb-8">
           <p className="mb-2 text-xs uppercase tracking-[0.3em] text-[var(--text-muted)]">
             DANIDA BRIDAL · KOLEKSIONI
@@ -192,7 +177,6 @@ export default function ReportDamage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Selected dress */}
           <section className="rounded-2xl border border-[var(--border)] bg-[var(--background)] p-5 sm:p-6">
             <div className="flex items-center gap-4">
               <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-[var(--pink-light)]">
@@ -217,7 +201,6 @@ export default function ReportDamage() {
             </div>
           </section>
 
-          {/* Damage details */}
           <section className="rounded-2xl border border-[var(--border)] bg-[var(--background)] p-5 sm:p-8">
             <div className="mb-6">
               <h2 className="font-serif text-xl text-[var(--foreground)]">
@@ -229,7 +212,6 @@ export default function ReportDamage() {
             </div>
 
             <div className="space-y-6">
-              {/* Description */}
               <div>
                 <label
                   htmlFor="description"
@@ -255,7 +237,6 @@ export default function ReportDamage() {
                 </p>
               </div>
 
-              {/* Report date */}
               <div>
                 <label
                   htmlFor="reportedAt"
@@ -282,54 +263,8 @@ export default function ReportDamage() {
                   />
                 </div>
               </div>
-
-              {/* Replacement requirement */}
-              <div className="rounded-xl border border-[var(--border)] p-4 sm:p-5">
-                <label className="flex cursor-pointer items-start gap-3">
-                  <input
-                    type="checkbox"
-                    name="needsReplacement"
-                    checked={formData.needsReplacement}
-                    onChange={handleChange}
-                    className="mt-1 h-4 w-4 accent-[var(--pink-dark)]"
-                  />
-
-                  <span>
-                    <span className="block text-sm font-medium text-[var(--foreground)]">
-                      Kërkohet zëvendësimi
-                    </span>
-                    <span className="mt-1 block text-sm leading-5 text-[var(--text-muted)]">
-                      Zgjidhni këto nëse artikulli ose pjesa e dëmtuar duhet
-                      të zëvendësohet.
-                    </span>
-                  </span>
-                </label>
-
-                {formData.needsReplacement && (
-                  <div className="mt-5 border-t border-[var(--border)] pt-5">
-                    <label
-                      htmlFor="replacementNote"
-                      className="mb-2 block text-sm font-medium text-[var(--foreground)]"
-                    >
-                      Shënim për zëvendësimin
-                    </label>
-
-                    <textarea
-                      id="replacementNote"
-                      name="replacementNote"
-                      value={formData.replacementNote}
-                      onChange={handleChange}
-                      rows={3}
-                      maxLength={3000}
-                      placeholder="Çfarë duhet zëvendësuar dhe pse? Shtoni detaje të dobishme..."
-                      className="w-full resize-y rounded-lg border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-sm text-[var(--foreground)] outline-none transition placeholder:text-[var(--text-muted)] focus:border-[var(--pink-dark)]"
-                    />
-                  </div>
-                )}
-              </div>
             </div>
 
-            {/* Error message */}
             {error && (
               <div
                 role="alert"
@@ -340,15 +275,6 @@ export default function ReportDamage() {
               </div>
             )}
 
-            {/* Success feedback for any future non-navigating flow */}
-            {success && (
-              <div className="mt-6 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800">
-                <CheckCircle2 size={17} />
-                Raporti i dëmtimit u dërgua me sukses.
-              </div>
-            )}
-
-            {/* Actions */}
             <div className="mt-8 flex flex-col-reverse gap-3 border-t border-[var(--border)] pt-6 sm:flex-row sm:justify-end">
               <Link
                 to={`/dresses/${id}`}
